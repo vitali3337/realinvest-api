@@ -45,3 +45,17 @@ def run_parser():
         return {"status": "parser executed"}
     except Exception as e:
         return {"status": "parser error", "error": str(e)}
+from fastapi import Request
+
+@app.post("/listings")
+async def add_listing(request: Request):
+
+    new_item = await request.json()
+
+    data = load_data()
+
+    data.append(new_item)
+
+    save_data(data)
+
+    return {"status": "added"}
