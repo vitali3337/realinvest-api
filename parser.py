@@ -17,33 +17,55 @@ def load_data():
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-
-
 def parse_makler():
-    url = "https://makler.md/real-estate"
-    
-    r = requests.get(url)
+
+    url = "https://makler.md/real-estate/real-estate-for-sale"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+
+    r = requests.get(url, headers=headers)
     soup = BeautifulSoup(r.text, "html.parser")
 
     listings = []
 
-    for item in soup.select("a")[:10]:
-        title = item.get_text(strip=True)
+    cards = soup.select("a")
 
-        if len(title) > 20:
-            listings.append({
-                "title": title,
-                "type": "дом",
-                "district": "",
-                "price": 0,
-                "area": None,
-                "rooms": None,
-                "desc": "",
-                "source": "makler",
-                "parsed": datetime.now().strftime("%Y-%m-%d %H:%M")
-            })
+    for card in cards:
+
+        title = card.get_text(strip=True)
+
+        if len(title) < 25:
+            continue
+
+        link = card.get("href")
+
+        if link and not link.startswith("http"):
+            link = "https://makler.md" + link
+
+        listing = {
+            "title": title,
+            "type": "дом",
+            "district": "",
+            "price": 0,
+            "area": None,
+            "rooms": None,
+            "img": None,
+            "desc": "",
+            "link": link,
+            "source": "makler",
+            "parsed": datetime.now().strftime("%Y-%m-%d %H:%M")
+        }
+
+        listings.append(listing)
+
+        if len(listings) >= 20:
+            break
 
     return listings
+
+
 
 
 def run():
