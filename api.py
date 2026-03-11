@@ -401,4 +401,9 @@ def get_stats():
 @app.get("/", summary="Health check")
 def root():
     return {"status": "ok", "service": "РеалИнвест API v2.0", "docs": "/docs"}
-    
+   from parser import run as run_parser
+
+@app.get("/run-parser")
+def run_parser_now():
+    run_parser()
+    return {"status": "parser executed"} 
