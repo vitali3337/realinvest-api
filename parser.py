@@ -17,6 +17,8 @@ def load_data():
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+
 def parse_makler():
 
     url = "https://makler.md/real-estate/real-estate-for-sale"
@@ -25,7 +27,12 @@ def parse_makler():
         "User-Agent": "Mozilla/5.0"
     }
 
-    r = requests.get(url, headers=headers)
+    try:
+        r = requests.get(url, headers=headers, timeout=10)
+    except:
+        print("Ошибка подключения к Makler")
+        return []
+
     soup = BeautifulSoup(r.text, "html.parser")
 
     listings = []
@@ -66,18 +73,24 @@ def parse_makler():
     return listings
 
 
-
-
 def run():
+
     data = load_data()
 
     new_items = parse_makler()
 
-    data.extend(new_items)
+    existing_links = {item.get("link") for item in data}
+
+    added = 0
+
+    for item in new_items:
+        if item.get("link") not in existing_links:
+            data.append(item)
+            added += 1
 
     save_data(data)
 
-    print("Добавлено объявлений:", len(new_items))
+    print("Добавлено объявлений:", added)
 
 
 if __name__ == "__main__":
