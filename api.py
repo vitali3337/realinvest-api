@@ -1,16 +1,14 @@
-from database import engine, SessionLocal
-from models import Base, Listing
-Base.metadata.create_all(bind=engine)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import json
+
+from database import engine, SessionLocal
+from models import Base, Listing
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-DATA_FILE = "houses.json"
-
-# разрешаем доступ сайту
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,8 +17,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# модель объявления
-class Listing(BaseModel):
+# модель API
+class ListingCreate(BaseModel):
     title: str
     price: int
     city: str
@@ -31,51 +29,61 @@ class Listing(BaseModel):
     image: str
 
 
-# загрузка данных
-def load_data():
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return []
-
-
-# сохранение данных
-def save_data(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-
-# проверка API
 @app.get("/")
 def root():
-    data = load_data()
-    return {"status": "ok", "listings": len(data)}
+    return {"status": "ok"}
 
 
-# получение объявлений
 @app.get("/listings")
 def get_listings():
-    data = load_data()
+
+    db = SessionLocal()
+
+    listings = db.query(Listing).all()
+
+    result = []
+
+    for l in listings:
+        result.append({
+            "id": l.id,
+            "title": l.title,
+            "price": l.price,
+            "city": l.city,
+            "rooms": l.rooms,
+            "floor": l.floor,
+            "phone": l.phone,
+            "description": l.description,
+            "image": l.image
+        })
+
+    db.close()
+
     return {
-        "total": len(data),
-        "listings": data
+        "total": len(result),
+        "listings": result
     }
 
 
-# добавление объявления
 @app.post("/listings")
-def add_listing(listing: Listing):
+def add_listing(listing: ListingCreate):
 
-    data = load_data()
+    db = SessionLocal()
 
-    new_listing = listing.dict()
+    new_listing = Listing(
+        title=listing.title,
+        price=listing.price,
+        city=listing.city,
+        rooms=listing.rooms,
+        floor=listing.floor,
+        phone=listing.phone,
+        description=listing.description,
+        image=listing.image
+    )
 
-    data.append(new_listing)
+    db.add(new_listing)
+    db.commit()
+    db.refresh(new_listing)
 
-    save_data(data)
+    db.close()
 
-    return {
-        "status": "listing added",
-        "listing": new_listing
-}
+    return {"status": "listing added"}
