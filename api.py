@@ -1,77 +1,78 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import json, os, uuid
-from datetime import datetime
+from pydantic import BaseModel
+import json
 
 app = FastAPI()
+
 DATA_FILE = "houses.json"
-LEADS_FILE = "leads.json"
 
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# разрешаем доступ сайту
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-def load(f):
+# модель объявления
+class Listing(BaseModel):
+    title: str
+    price: int
+    city: str
+    rooms: int
+    floor: str
+    phone: str
+    description: str
+    image: str
+
+
+# загрузка данных
+def load_data():
     try:
-        with open(f, encoding="utf-8") as fp: return json.load(fp)
-    except: return []
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return []
 
-def save(f, d):
-    with open(f, "w", encoding="utf-8") as fp: json.dump(d, fp, ensure_ascii=False, indent=2)
 
+# сохранение данных
+def save_data(data):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+# проверка API
 @app.get("/")
-def root(): return {"status": "ok", "listings": len(load(DATA_FILE))}
+def root():
+    data = load_data()
+    return {"status": "ok", "listings": len(data)}
 
+
+# получение объявлений
 @app.get("/listings")
-def get_listings(limit: int = 200, offset: int = 0):
-    d = load(DATA_FILE)
-    return {"total": len(d), "offset": offset, "limit": limit, "listings": d[offset:offset+limit]}
+def get_listings():
+    data = load_data()
+    return {
+        "total": len(data),
+        "listings": data
+    }
 
+
+# добавление объявления
 @app.post("/listings")
-async def add_listing(r: Request):
-    item = await r.json()
-    d = load(DATA_FILE)
-    item["id"] = item.get("id") or str(uuid.uuid4())[:8]
-    item["parsed"] = datetime.now().isoformat()
-    item["is_vip"] = item.get("is_vip", False)
-    item["source"] = item.get("source", "manual")
-    d.append(item)
-    save(DATA_FILE, d)
-    return {"ok": True, "id": item["id"]}
+def add_listing(listing: Listing):
 
-@app.delete("/listings/{lid}")
-def del_listing(lid: str):
-    d = [x for x in load(DATA_FILE) if x.get("id") != lid]
-    save(DATA_FILE, d)
-    return {"ok": True}
+    data = load_data()
 
-@app.post("/listings/{lid}/vip")
-def make_vip(lid: str):
-    d = load(DATA_FILE)
-    for x in d:
-        if x.get("id") == lid: x["is_vip"] = True
-    save(DATA_FILE, d)
-    return {"ok": True}
+    new_listing = listing.dict()
 
-@app.post("/leads")
-async def add_lead(r: Request):
-    lead = await r.json()
-    lead["id"] = str(uuid.uuid4())[:8]
-    lead["created_at"] = datetime.now().isoformat()
-    lead["status"] = "new"
-    leads = load(LEADS_FILE)
-    leads.insert(0, lead)
-    save(LEADS_FILE, leads)
-    token = os.getenv("TELEGRAM_TOKEN", "")
-    chat = os.getenv("TELEGRAM_CHAT", "")
-    if token and chat:
-        try:
-            import httpx
-            async with httpx.AsyncClient() as c:
-                await c.post(f"https://api.telegram.org/bot{token}/sendMessage",
-                    json={"chat_id": chat, "text": f"📥 Заявка ESTA\n👤 {lead.get('name','?')} {lead.get('phone','')}\n🏠 {lead.get('listing','')}"})
-        except: pass
-    return {"ok": True}
+    data.append(new_listing)
 
-@app.get("/leads")
-def get_leads(secret: str = ""):
-    if secret != "realinvest2024": return {"error": "unauthorized"}
-    return {"leads": load(LEADS_FILE)}
+    save_data(data)
+
+    return {
+        "status": "listing added",
+        "listing": new_listing
+}
