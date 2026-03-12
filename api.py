@@ -1,3 +1,6 @@
+from database import engine, SessionLocal
+from models import Base, Listing
+Base.metadata.create_all(bind=engine)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
