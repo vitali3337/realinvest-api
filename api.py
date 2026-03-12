@@ -1,8 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-from database import engine, SessionLocal
+from database import SessionLocal, engine
 from models import Base, Listing
 
 Base.metadata.create_all(bind=engine)
@@ -12,78 +12,59 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# модель API
-class ListingCreate(BaseModel):
-    title: str
-    price: int
-    city: str
-    rooms: int
-    floor: str
-    phone: str
-    description: str
-    image: str
-
-
-@app.get("/")
-def root():
-    return {"status": "ok"}
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 @app.get("/listings")
-def get_listings():
-
-    db = SessionLocal()
-
+def get_listings(db: Session = Depends(get_db)):
     listings = db.query(Listing).all()
 
-    result = []
-
-    for l in listings:
-        result.append({
-            "id": l.id,
-            "title": l.title,
-            "price": l.price,
-            "city": l.city,
-            "rooms": l.rooms,
-            "floor": l.floor,
-            "phone": l.phone,
-            "description": l.description,
-            "image": l.image
-        })
-
-    db.close()
-
     return {
-        "total": len(result),
-        "listings": result
+        "total": len(listings),
+        "listings": listings
     }
 
 
 @app.post("/listings")
-def add_listing(listing: ListingCreate):
+def add_listing(data: dict, db: Session = Depends(get_db)):
 
-    db = SessionLocal()
+    listing = Listing(**data)
 
-    new_listing = Listing(
-        title=listing.title,
-        price=listing.price,
-        city=listing.city,
-        rooms=listing.rooms,
-        floor=listing.floor,
-        phone=listing.phone,
-        description=listing.description,
-        image=listing.image
-    )
-
-    db.add(new_listing)
+    db.add(listing)
     db.commit()
-    db.refresh(new_listing)
+    db.refresh(listing)
 
-    db.close()
+    return listing
 
-    return {"status": "listing added"}
+
+@app.delete("/listings/{id}")
+def delete_listing(id: int, db: Session = Depends(get_db)):
+
+    listing = db.query(Listing).get(id)
+
+    db.delete(listing)
+    db.commit()
+
+    return {"status":"deleted"}
+
+
+@app.put("/listings/{id}")
+def update_listing(id: int, data: dict, db: Session = Depends(get_db)):
+
+    listing = db.query(Listing).get(id)
+
+    for key in data:
+        setattr(listing, key, data[key])
+
+    db.commit()
+
+    return listing
